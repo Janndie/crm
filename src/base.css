@@ -1,7 +1,7 @@
 :root {
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color: #17263b;
-  background: #f4f6f9;
+  background: #f5f7fa;
   font-synthesis: none;
   --text: #17263b;
   --muted: #56657a;
@@ -13,7 +13,7 @@
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 280px; }
 h1, h2, p, ul, ol, dl { margin: 0; }
-h1 { font-size: clamp(1.9rem, 4vw, 2.6rem); line-height: 1.15; letter-spacing: -.035em; }
+h1 { font-size: clamp(1.7rem, 3vw, 2rem); line-height: 1.2; letter-spacing: -.025em; }
 h2 { font-size: 1.12rem; line-height: 1.35; }
 p { line-height: 1.55; }
 a { color: var(--primary); }
