@@ -24,10 +24,14 @@ export function LoadResult<T>({ state, refresh, children }: ReturnType<typeof us
 }
 
 export function PageHeading({ eyebrow, title, detail, action }: {
-  eyebrow: string; title: string; detail?: string; action?: ReactNode
+  eyebrow?: string; title: string; detail?: string; action?: ReactNode
 }) {
   return <div className={styles.heading}>
-    <div><div className={styles.eyebrow}>{eyebrow}</div><h1>{title}</h1>{detail && <p className={styles.muted}>{detail}</p>}</div>
+    <div>
+      {eyebrow && <div className={styles.eyebrow}>{eyebrow}</div>}
+      <h1>{title}</h1>
+      {detail && <p className={styles.muted}>{detail}</p>}
+    </div>
     {action}
   </div>
 }
@@ -40,16 +44,37 @@ export function StatusBadge({ status }: { status: Status }) {
   return <span className={styles.badge} data-status={status}>{statusLabels[status]}</span>
 }
 
-export function TaskList({ tasks, showObject = false }: { tasks: Task[]; showObject?: boolean }) {
-  if (!tasks.length) return <Notice>Задач пока нет.</Notice>
-  return <ul className={styles.list}>
-    {tasks.map((task) => <li key={task.id}>
-      <Link className={styles.rowLink} to={'/tasks/' + task.id}>
-        <span><strong>{task.title}</strong><small>{showObject ? task.object?.name : task.assignee?.display_name}</small></span>
-        <StatusBadge status={task.status} />
-      </Link>
-    </li>)}
-  </ul>
+export function StatusFilter({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  return <label>Статус
+    <select value={value} onChange={(event) => onChange(event.target.value)}>
+      <option value="">Все статусы</option>
+      {Object.entries(statusLabels).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+    </select>
+  </label>
+}
+
+export function TaskList({ tasks, showObject = false, emptyText = 'Задач пока нет.' }: {
+  tasks: Task[]; showObject?: boolean; emptyText?: string
+}) {
+  if (!tasks.length) return <Notice>{emptyText}</Notice>
+  const contextLabel = showObject ? 'Объект' : 'Исполнитель'
+  return <div className={styles.taskList}>
+    <div className={styles.listHeader} aria-hidden="true">
+      <span>Задача</span><span>{contextLabel}</span><span>Статус</span>
+    </div>
+    <ul className={styles.list} aria-label="Список задач">
+      {tasks.map((task) => <li key={task.id}>
+        <Link className={styles.rowLink} to={'/tasks/' + task.id}>
+          <strong>{task.title}</strong>
+          <span className={styles.rowContext}>
+            <span className={styles.visuallyHidden}>{contextLabel}: </span>
+            {(showObject ? task.object?.name : task.assignee?.display_name) ?? 'Не указан'}
+          </span>
+          <StatusBadge status={task.status} />
+        </Link>
+      </li>)}
+    </ul>
+  </div>
 }
 
 function FormPanel({ title, onCancel, onSubmit, children }: {

@@ -6,7 +6,7 @@ import {
   getTasks, saveObject, saveTask, statusLabels, type Profile, type Status, type Task,
 } from './data'
 import {
-  Back, DeletePanel, LoadResult, Notice, ObjectForm, PageHeading, StatusBadge, TaskForm, TaskList,
+  Back, DeletePanel, LoadResult, Notice, ObjectForm, PageHeading, StatusBadge, StatusFilter, TaskForm, TaskList,
 } from './components'
 import { useLoad } from './useLoad'
 import styles from './app.module.css'
@@ -16,25 +16,54 @@ const dates = new Intl.DateTimeFormat('ru-RU', { dateStyle: 'medium', timeStyle:
 export function ObjectsPage({ profile }: { profile: Profile }) {
   const navigate = useNavigate()
   const [creating, setCreating] = useState(false)
+  const [query, setQuery] = useState('')
   const load = useLoad(getObjects)
   return <>
-    <PageHeading eyebrow="Рабочее пространство" title="Объекты" detail="Стройки и связанные с ними задачи"
+    <PageHeading title="Объекты" detail="Строительные площадки и задачи по ним"
       action={profile.role === 'manager' && <button type="button" className={styles.primary}
         onClick={() => setCreating(true)}>Создать объект</button>} />
     {creating && <ObjectForm onCancel={() => setCreating(false)} onSave={async (fields) => {
       const object = await saveObject(fields)
       if (object) navigate('/objects/' + object.id)
     }} />}
-    <LoadResult {...load}>{(objects) => objects?.length
-      ? <ul className={styles.grid}>{objects.map((object) => <li key={object.id}>
-        <Link className={styles.objectCard} to={'/objects/' + object.id}>
-          <span className={styles.objectMark} aria-hidden="true">▥</span>
-          <strong>{object.name}</strong>
-          <span className={styles.muted}>{object.address}</span>
-          <span className={styles.cardFooter}>Открыть объект <span aria-hidden="true">→</span></span>
-        </Link>
-      </li>)}</ul>
-      : <Notice>{profile.role === 'manager' ? 'Объектов пока нет.' : 'Пока нет объектов с вашими задачами.'}</Notice>}
+    <LoadResult {...load}>{(objects) => {
+      if (!objects?.length) return <Notice>{profile.role === 'manager' ? 'Объектов пока нет.' : 'Пока нет объектов с вашими задачами.'}</Notice>
+      const normalizedQuery = query.trim().toLocaleLowerCase('ru')
+      const visible = objects.filter(({ name, address }) => [name, address].some(
+        (value) => value.toLocaleLowerCase('ru').includes(normalizedQuery),
+      ))
+      return <>
+        <div className={styles.objectToolbar}>
+          <label className={styles.search}>
+            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
+              <circle cx="10.8" cy="10.8" r="5.8" /><path d="m15 15 4 4" strokeLinecap="round" />
+            </svg>
+            <input type="search" aria-label="Поиск объектов" placeholder="Название или адрес" value={query}
+              onChange={(event) => setQuery(event.target.value)} />
+          </label>
+          <span className={styles.resultCount} role="status">
+            {normalizedQuery ? `Найдено: ${visible.length} из ${objects.length}` : `Всего объектов: ${objects.length}`}
+          </span>
+        </div>
+        {visible.length ? <ul className={styles.grid}>{visible.map((object) => <li key={object.id}>
+          <Link className={styles.objectCard} to={'/objects/' + object.id}>
+            <span className={styles.objectMark} aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 20h16M6 20V6l9-3v17m0-11h3v11M9 8h2m-2 4h2m-2 4h2" />
+              </svg>
+            </span>
+            <div className={styles.objectInfo}>
+              <strong>{object.name}</strong>
+              <p>{object.address}</p>
+            </div>
+            <span className={styles.cardFooter}>Открыть объект <span aria-hidden="true">→</span></span>
+          </Link>
+        </li>)}</ul> : <Notice>
+          <span>Объекты не найдены.</span>
+          <button type="button" onClick={() => setQuery('')}>Сбросить поиск</button>
+        </Notice>}
+      </>
+    }}
     </LoadResult>
   </>
 }
@@ -42,6 +71,7 @@ export function ObjectsPage({ profile }: { profile: Profile }) {
 export function ObjectPage({ id, profile }: { id: string; profile: Profile }) {
   const navigate = useNavigate()
   const [form, setForm] = useState<'object' | 'task' | 'delete' | null>(null)
+  const [status, setStatus] = useState('')
   const manager = profile.role === 'manager'
   const request = useCallback(() => getObjectPage(id, manager), [id, manager])
   const load = useLoad(request)
@@ -50,6 +80,7 @@ export function ObjectPage({ id, profile }: { id: string; profile: Profile }) {
     <LoadResult {...load}>{(data) => {
       if (!data) return <Notice>Объект недоступен или уже удалён.</Notice>
       const { object, tasks, workers } = data
+      const visible = tasks?.filter((task) => !status || task.status === status) ?? []
       return <>
         <PageHeading eyebrow="Объект" title={object.name} detail={object.address} action={manager &&
           <div className={styles.actions}>
@@ -74,7 +105,10 @@ export function ObjectPage({ id, profile }: { id: string; profile: Profile }) {
             const task = await saveTask(fields)
             if (task) navigate('/tasks/' + task.id)
           }} />}
-        <TaskList tasks={tasks ?? []} />
+        {!!tasks?.length && <div className={styles.filters}>
+          <StatusFilter value={status} onChange={setStatus} />
+        </div>}
+        <TaskList tasks={visible} emptyText={status ? 'Задач с таким статусом нет.' : undefined} />
       </>
     }}</LoadResult>
   </>
@@ -86,27 +120,23 @@ export function MyTasksPage({ profile }: { profile: Profile }) {
   const request = useCallback(() => getTasks({ assigneeId: profile.id }), [profile.id])
   const load = useLoad(request)
   return <>
-    <PageHeading eyebrow="Рабочее пространство" title="Мои задачи" detail="Задачи, назначенные вам" />
+    <PageHeading title="Мои задачи" detail="Задачи, назначенные вам" />
     <LoadResult {...load}>{(tasks) => {
       if (!tasks?.length) return <Notice>Задач пока нет.</Notice>
       const objects = new Map(tasks.map((task) => [task.object_id, task.object?.name ?? 'Объект']))
       const visible = tasks.filter((task) => (!status || task.status === status) && (!objectId || task.object_id === objectId))
       return <>
         <div className={styles.filters}>
-          <label>Статус
-            <select value={status} onChange={(event) => setStatus(event.target.value)}>
-              <option value="">Все статусы</option>
-              {Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-            </select>
-          </label>
+          <StatusFilter value={status} onChange={setStatus} />
           <label>Объект
             <select value={objectId} onChange={(event) => setObjectId(event.target.value)}>
               <option value="">Все объекты</option>
               {[...objects].map(([id, name]) => <option key={id} value={id}>{name}</option>)}
             </select>
           </label>
+          {(status || objectId) && <button type="button" onClick={() => { setStatus(''); setObjectId('') }}>Сбросить</button>}
         </div>
-        {visible.length ? <TaskList tasks={visible} showObject /> : <Notice>По выбранным фильтрам задач нет.</Notice>}
+        <TaskList tasks={visible} showObject emptyText="По выбранным фильтрам задач нет." />
       </>
     }}</LoadResult>
   </>
